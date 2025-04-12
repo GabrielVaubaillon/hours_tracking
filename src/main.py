@@ -58,18 +58,17 @@ def load_date_file(input_file: Path) -> dict[datetime.date, str]:
 
 def parse_cli_args(args: list[str] | None = None):
     parser = argparse.ArgumentParser()
+
     parser.add_argument("--verbose", "-v", action="count", default=0)
-    parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
     parser.add_argument("--quiet", "-q", action="store_true")
-    if args is None:
-        cli_args = parser.parse_args()
-    else:
-        cli_args = parser.parse_args(args)
-    return cli_args
+    parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
+
+    return parser.parse_args() if args is None else parser.parse_args(args)
 
 
 def main():
 
+    config = Configuration()
     cli_args = parse_cli_args()
 
     test()
