@@ -45,6 +45,9 @@ class Date(datetime.date):
         self.description = description
         return self
 
+    def str_weekday(self):
+        return WEEKDAYS[self.weekday()]
+
 
 def parse_dates(str_: str, quiet: bool = False) -> list[Date]:
 
@@ -77,18 +80,41 @@ def load_date_file(input_file: Path) -> list[Date]:
     return parse_dates(str_)
 
 
-def report(start_date: Date, end_date: Date, quiet=False) -> dict[str, int]:
+def report(
+    start_date: Date,
+    end_date: Date,
+    holidays: list[Date] | None = None,
+    quiet: bool = False,
+) -> dict[str, int]:
+
     delta: datetime.timedelta = (end_date - start_date) + datetime.timedelta(days=1)
     total_days: int = delta.days
     complete_weeks: int = total_days // 7
-    reminder_days: int = total_days % 7
 
-    working_days: int = complete_weeks * len(config.day_worked)
-    for i in range(reminder_days):
-        if WEEKDAYS[(i + start_date.weekday()) % 7] in config.day_worked:
+    if holidays is None:
+        holidays = []
+    # TODO: if this part gets to long, use better search algorithms
+    holidays_in_range: list[Date] = [
+        date for date in holidays if date >= start_date and date <= end_date
+    ]
+
+    date_range: list[Date] = [
+        start_date + datetime.timedelta(days=i)
+        for i in range(total_days)
+    ]
+
+    working_days: int = 0
+    off_days: int = 0
+    holidays_on_working_day: int = 0
+    for date in date_range:
+        if date in holidays_in_range:
+            off_days += 1
+            if date.str_weekday() in config.day_worked:
+                holidays_on_working_day += 1
+        elif date.str_weekday() in config.day_worked:
             working_days += 1
-
-    off_days: int = total_days - working_days
+        else:
+            off_days += 1
 
     if not quiet:
         print(
@@ -96,12 +122,15 @@ def report(start_date: Date, end_date: Date, quiet=False) -> dict[str, int]:
             f" and {end_date.strftime("%A %Y-%m-%d")}\n"
             f" - total days: {total_days}  ({total_days / 7:.1f} weeks)\n"
             f" - working days: {working_days}\n"
-            f" - off days: {off_days}\n"
+            f" - off days: {off_days}"
+            f" (including {len(holidays_in_range)} holidays)\n"
         )
     results = {
         "total_days": total_days,
         "working_days": working_days,
         "off_days": off_days,
+        "relevant_holidays": holidays_on_working_day,
+        "total_holidays": len(holidays_in_range),
     }
     return results
 
@@ -146,6 +175,9 @@ def main():
 
 
 def test():
+    global config
+    config = Configuration()
+
     # Date parsing
     # ------------
     str_date: str = (
@@ -166,17 +198,57 @@ def test():
     dates: list[Date] = parse_dates(str_date, quiet=True)
     assert dates == expected_dates, f"parse_date() return invalid object\n{dates}\n{expected_dates}"
 
+    bank_holidays: list[Date] = parse_dates(
+        # 2024
+        "2024-01-01 New Year's Day\n"
+        "2024-02-05 St Brigid's Day\n"
+        "2024-03-18 Saint Patrick's Day\n"
+        "2024-04-01 Easter Monday\n"
+        "2024-05-06 May Day\n"
+        "2024-06-03 June Bank Holiday\n"
+        "2024-08-05 August Bank Holiday\n"
+        "2024-10-28 October Bank Holiday\n"
+        "2024-12-25 Christmas Day\n"
+        "2024-12-26 St Stephens's Day\n"
+        # 2025
+        "2025-01-01 New Year's Day\n"
+        "2025-02-03 St Brigid's Day\n"
+        "2025-03-17 Saint Patrick's Day\n"
+        "2025-04-21 Easter Monday\n"
+        "2025-05-05 May Day\n"
+        "2025-06-02 June Bank Holiday\n"
+        "2025-08-04 August Bank Holiday\n"
+        "2025-10-27 October Bank Holiday\n"
+        "2025-12-25 Christmas Day\n"
+        "2025-12-26 St Stephens's Day\n"
+        # 2026
+        "2026-01-01 New Year's Day\n"
+        "2026-02-02 St Brigid's Day\n"
+        "2026-03-17 Saint Patrick's Day\n"
+        "2026-04-06 Easter Monday\n"
+        "2026-05-04 May Day\n"
+        "2026-06-01 June Bank Holiday\n"
+        "2026-08-03 August Bank Holiday\n"
+        "2026-10-26 October Bank Holiday\n"
+        "2026-12-25 Christmas Day\n"
+        "2026-12-26 St Stephens's Day\n"
+    )
+
     # Report generation
     # -----------------
+    results: dict[str, int]
     results = report(
         start_date=Date(2025, 4, 4),
         end_date=Date(2025, 4, 23),
+        holidays=bank_holidays,
         quiet=True,
     )
     expected_results = {
         "total_days": 20,
-        "working_days": 14,
-        "off_days": 6,
+        "working_days": 13,
+        "off_days": 7,
+        "relevant_holidays": 1,
+        "total_holidays": 1,
     }
     assert (
         results == expected_results
@@ -185,12 +257,15 @@ def test():
     results = report(
         start_date=Date(2025, 4, 7),
         end_date=Date(2025, 4, 20),
+        holidays=bank_holidays,
         quiet=True,
     )
     expected_results = {
         "total_days": 14,
         "working_days": 10,
         "off_days": 4,
+        "relevant_holidays": 0,
+        "total_holidays": 0,
     }
     assert (
         results == expected_results
@@ -199,12 +274,15 @@ def test():
     results = report(
         start_date=Date(2025, 4, 4),
         end_date=Date(2026, 4, 23),
+        holidays=bank_holidays,
         quiet=True,
     )
     expected_results = {
         "total_days": 385,
-        "working_days": 275,
-        "off_days": 110,
+        "working_days": 264,
+        "off_days": 121,
+        "relevant_holidays": 11,
+        "total_holidays": 11,
     }
     assert (
         results == expected_results
