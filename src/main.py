@@ -98,10 +98,7 @@ def report(
         date for date in holidays if date >= start_date and date <= end_date
     ]
 
-    date_range: list[Date] = [
-        start_date + datetime.timedelta(days=i)
-        for i in range(total_days)
-    ]
+    date_range: list[Date] = [start_date + datetime.timedelta(days=i) for i in range(total_days)]
 
     working_days: int = 0
     off_days: int = 0
@@ -174,7 +171,7 @@ def main():
         )
 
 
-def test():
+def test() -> int:
     global config
     config = Configuration()
 
@@ -287,6 +284,8 @@ def test():
     assert (
         results == expected_results
     ), f"report() return invalid values\n{results}\n{expected_results}"
+
+    return 0
 
 
 if __name__ == "__main__":
