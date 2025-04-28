@@ -53,7 +53,7 @@ def parse_dates(str_: str, quiet: bool = False) -> list[Date]:
 
     # TODO: no errors by lines here?
     pattern = re.compile(
-        r"^(\d{4}-\d{2}-\d{2}) (.*?)$",  # TODO
+        r"^(\d{4}-\d{2}-\d{2})(.*?)$",  # TODO
         re.MULTILINE,
     )
     dates: list[Date] = []
@@ -66,7 +66,7 @@ def parse_dates(str_: str, quiet: bool = False) -> list[Date]:
                 print(f"WARNING: {date_str} - {error}")
             # errors[date_str] = error.__str__()
             continue
-        date.add_description(description)
+        date.add_description(description.strip())
         dates.append(date)
     return dates
 
@@ -84,6 +84,7 @@ def report(
     start_date: Date,
     end_date: Date,
     holidays: list[Date] | None = None,
+    vacations: list[Date] | None = None,
     quiet: bool = False,
 ) -> dict[str, int]:
 
@@ -97,30 +98,45 @@ def report(
     holidays_in_range: list[Date] = [
         date for date in holidays if date >= start_date and date <= end_date
     ]
+    if vacations is None:
+        vacations = []
+    vacations_in_range: list[Date] = [
+        date for date in vacations if date >= start_date and date <= end_date
+    ]
 
     date_range: list[Date] = [start_date + datetime.timedelta(days=i) for i in range(total_days)]
 
     working_days: int = 0
     off_days: int = 0
     holidays_on_working_day: int = 0
+    vacations_on_working_day: int = 0
+    vacations_on_holiday: int = 0
     for date in date_range:
         if date in holidays_in_range:
             off_days += 1
             if date.str_weekday() in config.day_worked:
                 holidays_on_working_day += 1
+            if date in vacations_in_range:
+                vacations_on_holiday += 1
+        elif date in vacations_in_range:
+            off_days += 1
+            if date.str_weekday() in config.day_worked:
+                vacations_on_working_day += 1
         elif date.str_weekday() in config.day_worked:
             working_days += 1
         else:
             off_days += 1
 
     if not quiet:
+        # TODO: move to outside of function
         print(
             f"Report between {start_date.strftime("%A %Y-%m-%d")}"
             f" and {end_date.strftime("%A %Y-%m-%d")}\n"
             f" - total days: {total_days}  ({total_days / 7:.1f} weeks)\n"
             f" - working days: {working_days}\n"
-            f" - off days: {off_days}"
-            f" (including {len(holidays_in_range)} holidays)\n"
+            f" - total off days: {off_days}\n"
+            f" - holidays: {holidays_on_working_day} falling on working weekdays\n"
+            f" - vacations: {vacations_on_working_day} days\n"
         )
     results = {
         "total_days": total_days,
@@ -128,6 +144,9 @@ def report(
         "off_days": off_days,
         "relevant_holidays": holidays_on_working_day,
         "total_holidays": len(holidays_in_range),
+        "vacations_on_working_day": vacations_on_working_day,
+        "vacations_on_holiday": vacations_on_holiday,
+        "total_vacations": len(vacations_in_range),
     }
     return results
 
@@ -185,12 +204,14 @@ def test() -> int:
         "2025-06-19 test 4\n"
         "2025-65-14 invalid month\n"
         "2024-12-32 invalid day\n"
+        "2026-05-05\n"
     )
     expected_dates = [
         Date(2025, 4, 12).add_description("test 1"),
         Date(2025, 4, 14).add_description("test 2"),
         Date(2024, 12, 24).add_description("test 3"),
         Date(2025, 6, 19).add_description("test 4"),
+        Date(2026, 5, 5),
     ]
     dates: list[Date] = parse_dates(str_date, quiet=True)
     assert dates == expected_dates, f"parse_date() return invalid object\n{dates}\n{expected_dates}"
@@ -231,6 +252,23 @@ def test() -> int:
         "2026-12-26 St Stephens's Day\n"
     )
 
+    vacations: list[Date] = parse_dates(
+        "2025-04-22 4 days weekend\n"
+        "2025-12-20 Winter vacation\n"
+        "2025-12-21\n"
+        "2025-12-22\n"
+        "2025-12-23\n"
+        "2025-12-24\n"
+        "2025-12-25 Christmas Day\n"
+        "2025-12-26 St Stephens's Day\n"
+        "2025-12-27\n"
+        "2025-12-28\n"
+        "2025-12-29\n"
+        "2025-12-30\n"
+        "2025-12-31\n"
+        "2026-01-01 New Year's Day\n"
+    )
+
     # Report generation
     # -----------------
     results: dict[str, int]
@@ -238,14 +276,18 @@ def test() -> int:
         start_date=Date(2025, 4, 4),
         end_date=Date(2025, 4, 23),
         holidays=bank_holidays,
+        vacations=vacations,
         quiet=True,
     )
     expected_results = {
         "total_days": 20,
-        "working_days": 13,
-        "off_days": 7,
+        "working_days": 12,
+        "off_days": 8,
         "relevant_holidays": 1,
         "total_holidays": 1,
+        "vacations_on_working_day": 1,
+        "vacations_on_holiday": 0,
+        "total_vacations": 1,
     }
     assert (
         results == expected_results
@@ -255,6 +297,7 @@ def test() -> int:
         start_date=Date(2025, 4, 7),
         end_date=Date(2025, 4, 20),
         holidays=bank_holidays,
+        vacations=vacations,
         quiet=True,
     )
     expected_results = {
@@ -263,6 +306,9 @@ def test() -> int:
         "off_days": 4,
         "relevant_holidays": 0,
         "total_holidays": 0,
+        "vacations_on_working_day": 0,
+        "vacations_on_holiday": 0,
+        "total_vacations": 0,
     }
     assert (
         results == expected_results
@@ -272,14 +318,18 @@ def test() -> int:
         start_date=Date(2025, 4, 4),
         end_date=Date(2026, 4, 23),
         holidays=bank_holidays,
+        vacations=vacations,
         quiet=True,
     )
     expected_results = {
         "total_days": 385,
-        "working_days": 264,
-        "off_days": 121,
+        "working_days": 257,
+        "off_days": 128,
         "relevant_holidays": 11,
         "total_holidays": 11,
+        "vacations_on_working_day": 7,
+        "vacations_on_holiday": 3,
+        "total_vacations": 14,
     }
     assert (
         results == expected_results
