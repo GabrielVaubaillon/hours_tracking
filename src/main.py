@@ -53,7 +53,7 @@ def parse_dates(str_: str, quiet: bool = False) -> list[Date]:
 
     # TODO: no errors by lines here?
     pattern = re.compile(
-        r"^(\d{4}-\d{2}-\d{2})(.*?)$",  # TODO
+        r"^(\d{4}-\d{2}-\d{2})(?!:)(.*?)$",  # TODO
         re.MULTILINE,
     )
     dates: list[Date] = []
@@ -68,6 +68,31 @@ def parse_dates(str_: str, quiet: bool = False) -> list[Date]:
             continue
         date.add_description(description.strip())
         dates.append(date)
+
+    range_pattern = re.compile(
+        r"^(\d{4}-\d{2}-\d{2}):(\d{4}-\d{2}-\d{2})(.*?)$",
+        re.MULTILINE,
+    )
+    for start_date_str, end_date_str, description in re.findall(range_pattern, str_):
+        try:
+            start_date = Date.fromisoformat(start_date_str)
+        except ValueError as error:
+            if not quiet:
+                print(f"WARNING: {start_date_str} - {error}")
+            # errors[date_str] = error.__str__()
+            continue
+        try:
+            end_date = Date.fromisoformat(end_date_str)
+        except ValueError as error:
+            if not quiet:
+                print(f"WARNING: {end_date_str} - {error}")
+            # errors[date_str] = error.__str__()
+            continue
+        date_range: list[Date] = [
+            (start_date + datetime.timedelta(days=i)).add_description(description.strip())
+            for i in range((end_date - start_date).days + 1)
+        ]
+        dates += date_range
     return dates
 
 
@@ -205,6 +230,8 @@ def test() -> int:
         "2025-65-14 invalid month\n"
         "2024-12-32 invalid day\n"
         "2026-05-05\n"
+        "2025-05-05:2025-07-05\n"
+        "2025-02-20:2025-03-04 Spring break\n"
     )
     expected_dates = [
         Date(2025, 4, 12).add_description("test 1"),
@@ -213,6 +240,12 @@ def test() -> int:
         Date(2025, 6, 19).add_description("test 4"),
         Date(2026, 5, 5),
     ]
+    expected_dates += [Date(2025, 5, d) for d in range(5, 32)]
+    expected_dates += [Date(2025, 6, d) for d in range(1, 31)]
+    expected_dates += [Date(2025, 7, d) for d in range(1, 6)]
+    expected_dates += [Date(2025, 2, d).add_description("Spring break") for d in range(20, 29)]
+    expected_dates += [Date(2025, 3, d).add_description("Spring break") for d in range(1, 5)]
+
     dates: list[Date] = parse_dates(str_date, quiet=True)
     assert dates == expected_dates, f"parse_date() return invalid object\n{dates}\n{expected_dates}"
 
@@ -253,20 +286,7 @@ def test() -> int:
     )
 
     vacations: list[Date] = parse_dates(
-        "2025-04-22 4 days weekend\n"
-        "2025-12-20 Winter vacation\n"
-        "2025-12-21\n"
-        "2025-12-22\n"
-        "2025-12-23\n"
-        "2025-12-24\n"
-        "2025-12-25 Christmas Day\n"
-        "2025-12-26 St Stephens's Day\n"
-        "2025-12-27\n"
-        "2025-12-28\n"
-        "2025-12-29\n"
-        "2025-12-30\n"
-        "2025-12-31\n"
-        "2026-01-01 New Year's Day\n"
+        "2025-04-22 4 days weekend\n" "2025-12-20:2026-01-01 Winter vacation\n"
     )
 
     # Report generation
