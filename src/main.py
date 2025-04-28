@@ -96,13 +96,13 @@ def parse_dates(str_: str, quiet: bool = False) -> list[Date]:
     return dates
 
 
-def load_date_file(input_file: Path) -> list[Date]:
+def load_date_file(input_file: Path, quiet: bool = False) -> list[Date]:
     assert input_file.is_file()
 
     with open(input_file, mode="rt", encoding="utf_8", errors="strict") as fh:
         str_ = fh.read()
 
-    return parse_dates(str_)
+    return parse_dates(str_, quiet=quiet)
 
 
 def report(
@@ -173,6 +173,7 @@ def date_iso_or_today(date_str):
 def parse_cli_args(args: list[str] | None = None):
     parser = argparse.ArgumentParser()
 
+    # TODO: add config file args, wich would provide config + paths to files. Default in .config?
     parser.add_argument(
         "--report",
         action="store",
@@ -182,8 +183,28 @@ def parse_cli_args(args: list[str] | None = None):
         help="Produce a basic report of the period between two dates",
     )
 
+    parser.add_argument(
+        "--holidays-file",
+        action="store",
+        nargs=1,
+        required=False,
+        type=Path,
+        help="File containing holidays dates",
+    )
+
+    parser.add_argument(
+        "--vacations-file",
+        action="store",
+        nargs=1,
+        required=False,
+        type=Path,
+        help="File containing vacations dates",
+    )
+
+    # TODO: use those arguments
     parser.add_argument("--verbose", "-v", action="count", default=0)
     parser.add_argument("--quiet", "-q", action="store_true")
+
     parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
 
     return parser.parse_args() if args is None else parser.parse_args(args)
@@ -197,11 +218,35 @@ def main():
     test()
 
     if cli_args.report:
+        holidays: list[Date]
+        if cli_args.holidays_file:
+            holidays_file: Path = cli_args.holidays_file.absolute()
+            if not holidays_file.is_file():
+                # TODO: proper error
+                print("ERROR: holidays_file doesn't exist.", holidays_file.as_posix())
+            holidays = load_date_file(holidays_file, quiet=False)
+        else:
+            print("No holidays file provided. Use --holidays-file to provide one")
+            holidays = []
+
+        vacations: list[Date]
+        if cli_args.holidays_file:
+            vacations_file: Path = cli_args.vacations_file.absolute()
+            if not vacations_file.is_file():
+                # TODO: proper error
+                print("ERROR: holidays_file doesn't exist.", vacations_file.as_posix())
+            vacations = load_date_file(vacations_file, quiet=False)
+        else:
+            print("No vacations file provided. Use --vacations-file to provide one")
+            vacations = []
+
         start_date: Date = min(cli_args.report)
         end_date: Date = max(cli_args.report)
         res: dict[str, int] = report(
             start_date=start_date,
             end_date=end_date,
+            holidays=holidays,
+            vacations=vacations,
         )
         print(
             f"Report between {start_date.strftime("%A %Y-%m-%d")}"
