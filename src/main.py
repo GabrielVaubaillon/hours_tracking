@@ -230,11 +230,11 @@ def main():
             holidays = []
 
         vacations: list[Date]
-        if cli_args.holidays_file:
+        if cli_args.vacations_file:
             vacations_file: Path = cli_args.vacations_file.absolute()
             if not vacations_file.is_file():
                 # TODO: proper error
-                print("ERROR: holidays_file doesn't exist.", vacations_file.as_posix())
+                print("ERROR: vacations_file doesn't exist.", vacations_file.as_posix())
             vacations = load_date_file(vacations_file, quiet=False)
         else:
             print("No vacations file provided. Use --vacations-file to provide one")
