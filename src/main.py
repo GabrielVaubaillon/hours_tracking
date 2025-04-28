@@ -115,7 +115,6 @@ def report(
 
     delta: datetime.timedelta = (end_date - start_date) + datetime.timedelta(days=1)
     total_days: int = delta.days
-    complete_weeks: int = total_days // 7
 
     if holidays is None:
         holidays = []
@@ -152,17 +151,6 @@ def report(
         else:
             off_days += 1
 
-    if not quiet:
-        # TODO: move to outside of function
-        print(
-            f"Report between {start_date.strftime("%A %Y-%m-%d")}"
-            f" and {end_date.strftime("%A %Y-%m-%d")}\n"
-            f" - total days: {total_days}  ({total_days / 7:.1f} weeks)\n"
-            f" - working days: {working_days}\n"
-            f" - total off days: {off_days}\n"
-            f" - holidays: {holidays_on_working_day} falling on working weekdays\n"
-            f" - vacations: {vacations_on_working_day} days\n"
-        )
     results = {
         "total_days": total_days,
         "working_days": working_days,
@@ -209,9 +197,20 @@ def main():
     test()
 
     if cli_args.report:
-        report(
-            start_date=min(cli_args.report),
-            end_date=max(cli_args.report),
+        start_date: Date = min(cli_args.report)
+        end_date: Date = max(cli_args.report)
+        res: dict[str, int] = report(
+            start_date=start_date,
+            end_date=end_date,
+        )
+        print(
+            f"Report between {start_date.strftime("%A %Y-%m-%d")}"
+            f" and {end_date.strftime("%A %Y-%m-%d")}\n"
+            f" - total days: {res["total_days"]}  ({res["total_days"] / 7:.1f} weeks)\n"
+            f" - working days: {res["working_days"]}\n"
+            f" - total off days: {res["off_days"]}\n"
+            f" - holidays: {res["relevant_holidays"]} falling on working weekdays\n"
+            f" - vacations: {res["vacations_on_working_day"]} days\n"
         )
 
 
